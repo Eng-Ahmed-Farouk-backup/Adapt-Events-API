@@ -2,3 +2,4 @@ fastapi
 typing
 pydantic
 python-multipart
+uvicorn
