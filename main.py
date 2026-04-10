@@ -20,45 +20,47 @@ app.add_middleware(
 )
 
 def verify_api_key(api_key: str):
-    conn = sqlite3.connect("events.db")
-    cursor = conn.cursor()
-    cursor.execute("SELECT id,daily_limit,requests_today,last_request_date,key FROM api_keys WHERE key = ?", (api_key,))
-    row = cursor.fetchone()
-    if not row:
-        conn.close()
-        raise fastapi.HTTPException(status_code=401, detail="Invalid or inactive API key")
+    conn = sqlite3.connect("events.db")
+    cursor = conn.cursor()
+    cursor.execute("SELECT id,daily_limit,requests_today,last_request_date,key FROM api_keys WHERE key = ?", (api_key,))
+    row = cursor.fetchone()
+    if not row:
+        conn.close()
+        raise fastapi.HTTPException(status_code=401, detail="Invalid or inactive API key")
 
-    key_id, daily_limit, requests_today, last_reset_date, key_name = row
+    key_id, daily_limit, requests_today, last_reset_date, key_name = row
 
-    today = datetime.datetime.now().date()
-    last_reset = datetime.datetime.strptime(last_reset_date, '%Y-%m-%d').date()
 
-    if today > last_reset:
-        cursor.execute('''
-            UPDATE api_keys
-            SET requests_today = 0, last_request_date = ?
-            WHERE id = ?
-        ''', (today.strftime("%Y-%m-%d"), key_id))
-        requests_today = 0
+    today = datetime.datetime.now().date()
+    last_reset = datetime.datetime.strptime(last_reset_date, '%Y-%m-%d').date()
 
-    if requests_today >= daily_limit:
-        conn.close()
-        raise fastapi.HTTPException(
-            status_code=429, 
-            detail=f"Daily API limit of {daily_limit} requests exceeded. Please try again tomorrow."
-        )
+    if today > last_reset:
+        cursor.execute('''
+            UPDATE api_keys
+            SET requests_today = 0, last_request_date = ?
+            WHERE id = ?
+        ''', (today.strftime("%Y-%m-%d"), key_id))
+    requests_today = 0
 
-    cursor.execute('''
-        UPDATE api_keys
-        SET requests_today = requests_today + 1,
-            last_request_date = ?
-        WHERE id = ?
-    ''', (datetime.datetime.now().strftime("%Y-%m-%d"),key_id))
+    if requests_today >= daily_limit:
+        conn.close()
+        raise fastapi.HTTPException(
+            status_code=429,
+            detail=f"Daily API limit of {daily_limit} requests exceeded. Please try again tomorrow."
+        )
 
-    conn.commit()
-    conn.close()
+    cursor.execute('''
+        UPDATE api_keys
+        SET requests_today = requests_today + 1,
+        last_request_date = ?
+        WHERE id = ?
+    ''', (datetime.datetime.now().strftime("%Y-%m-%d"),key_id))
 
-    return True , key_id, key_name
+    conn.commit()
+    conn.close()
+
+    return True , key_id, key_name
+
 
 def event_to_dict(event):
     return {
