@@ -65,9 +65,39 @@ async def get_events(id: Optional[int] = None, name: Optional[str] = None, count
     
     return events
 
+class add_event_model(pydantic.BaseModel):
+    name: str
+    description: str
+    tags: list
+    date: str
+    ticket_price: int
+    city: str
+    country: str
 
 class add_api_key_model(pydantic.BaseModel):
     daily_limit: int
+
+@app.post("/add_event")
+async def add_event(model: add_event_model, api_key: str):
+    if not verify_api_key(api_key):
+        return {"error": "Invalid API key"}
+    
+    conn = sqlite3.connect('events.db')
+    cursor = conn.cursor()
+    try:
+        cursor.execute('''
+            INSERT INTO events (name, description, tags, date, ticket_price, city, country)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        ''', (model.name, model.description, ','.join(model.tags), model.date, model.ticket_price, model.city, model.country))
+        conn.commit()
+        return {"message": "Event added successfully"}
+    except Exception as e:
+        conn.rollback()
+        print(f"Error adding event: {e}")
+        return {"error": f"Error adding event: {e}"}
+    finally:
+        conn.close()
+
 
 @app.post("/generate_api_key")
 async def generate_api_key(model: add_api_key_model):
