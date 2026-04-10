@@ -20,49 +20,45 @@ app.add_middleware(
 )
 
 def verify_api_key(api_key: str):
-    conn = sqlite3.connect("events.db")
-    cursor = conn.cursor()
-    cursor.execute("SELECT * FROM api_keys WHERE key = ?", (api_key,))
-    row = cursor.fetchone()
-    if not row:
-        conn.close()
-        raise fastapi.HTTPException(status_code=401, detail="Invalid or inactive API key")
-    
-    key_id, daily_limit, requests_today, last_reset_date, key_name = row
-    
-    # Check if we need to reset the daily counter (new day)
-    today = datetime.now().date()
-    last_reset = datetime.strptime(last_reset_date, '%Y-%m-%d').date()
-    
-    if today > last_reset:
-        # Reset counter for new day
-        cursor.execute('''
-            UPDATE api_keys 
-            SET requests_today = 0, last_reset_date = ? 
-            WHERE id = ?
-        ''', (today, key_id))
-        requests_today = 0
-    
-    # Check if key has exceeded daily limit
-    if requests_today >= daily_limit:
-        conn.close()
-        raise fastapi.HTTPException(
-            status_code=429,  # Too Many Requests
-            detail=f"Daily API limit of {daily_limit} requests exceeded. Please try again tomorrow."
-        )
-    
-    # Increment the request counter
-    cursor.execute('''
-        UPDATE api_keys 
-        SET requests_today = requests_today + 1,
-            last_used = CURRENT_TIMESTAMP
-        WHERE id = ?
-    ''', (key_id,))
-    
-    conn.commit()
-    conn.close()
-    
-    return True , key_id, key_name
+    conn = sqlite3.connect("events.db")
+    cursor = conn.cursor()
+    cursor.execute("SELECT id,daily_limit,requests_today,last_request_date,key FROM api_keys WHERE key = ?", (api_key,))
+    row = cursor.fetchone()
+    if not row:
+        conn.close()
+        raise fastapi.HTTPException(status_code=401, detail="Invalid or inactive API key")
+
+    key_id, daily_limit, requests_today, last_reset_date, key_name = row
+
+    today = datetime.datetime.now().date()
+    last_reset = datetime.datetime.strptime(last_reset_date, '%Y-%m-%d').date()
+
+    if today > last_reset:
+        cursor.execute('''
+            UPDATE api_keys
+            SET requests_today = 0, last_request_date = ?
+            WHERE id = ?
+        ''', (today.strftime("%Y-%m-%d"), key_id))
+        requests_today = 0
+
+    if requests_today >= daily_limit:
+        conn.close()
+        raise fastapi.HTTPException(
+            status_code=429, 
+            detail=f"Daily API limit of {daily_limit} requests exceeded. Please try again tomorrow."
+        )
+
+    cursor.execute('''
+        UPDATE api_keys
+        SET requests_today = requests_today + 1,
+            last_request_date = ?
+        WHERE id = ?
+    ''', (datetime.datetime.now().strftime("%Y-%m-%d"),key_id))
+
+    conn.commit()
+    conn.close()
+
+    return True , key_id, key_name
 
 def event_to_dict(event):
     return {
@@ -124,7 +120,8 @@ class add_api_key_model(pydantic.BaseModel):
 
 @app.post("/add_event")
 async def add_event(model: add_event_model, api_key: str):
-    if not verify_api_key(api_key):
+    valid, key_id, key_name = verify_api_key(api_key)
+    if not valid:
         return {"error": "Invalid API key"}
     
     conn = sqlite3.connect('events.db')
@@ -145,7 +142,8 @@ async def add_event(model: add_event_model, api_key: str):
 
 @app.delete("/delete_event")
 async def delete_event(id: int, api_key: str):
-    if not verify_api_key(api_key):
+    valid, key_id, key_name = verify_api_key(api_key)
+    if not valid:
         return {"error": "Invalid API key"}
     
     conn = sqlite3.connect('events.db')
