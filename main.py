@@ -66,5 +66,24 @@ async def get_events(id: Optional[int] = None, name: Optional[str] = None, count
     return events
 
 
+class add_api_key_model(pydantic.BaseModel):
+    daily_limit: int
+
+@app.post("/generate_api_key")
+async def generate_api_key(model: add_api_key_model):
+    new_key = ''.join(random.choices(string.ascii_letters + string.digits, k=32))
+    conn = sqlite3.connect('events.db')
+    cursor = conn.cursor()
+    try:
+        cursor.execute('''
+                        INSERT INTO api_keys (key, daily_limit, requests_today, last_request_date)
+                        VALUES (?, ?, 0, ?)''',(new_key, model.daily_limit, datetime.datetime.now().strftime("%Y-%m-%d")))
+        conn.commit()
+        return {"api_key": new_key, "daily_limit": model.daily_limit}
+    except Exception as e:
+        conn.rollback()
+        print(f"Error generating API key: {e}")
+        return {"error": f"Error generating API key: {e}"}
+
 
 
