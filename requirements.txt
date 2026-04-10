@@ -1,3 +1,4 @@
 fastapi
 typing
 pydantic
+python-multipart
