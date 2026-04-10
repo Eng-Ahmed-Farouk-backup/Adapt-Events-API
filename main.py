@@ -98,6 +98,24 @@ async def add_event(model: add_event_model, api_key: str):
     finally:
         conn.close()
 
+@app.delete("/delete_event")
+async def delete_event(id: int, api_key: str):
+    if not verify_api_key(api_key):
+        return {"error": "Invalid API key"}
+    
+    conn = sqlite3.connect('events.db')
+    cursor = conn.cursor()
+    try:
+        cursor.execute("DELETE FROM events WHERE id = ?", (id,))
+        conn.commit()
+        return {"message": "Event deleted successfully"}
+    except Exception as e:
+        conn.rollback()
+        print(f"Error deleting event: {e}")
+        return {"error": f"Error deleting event: {e}"}
+    finally:
+        conn.close()
+    
 
 @app.post("/generate_api_key")
 async def generate_api_key(model: add_api_key_model):
